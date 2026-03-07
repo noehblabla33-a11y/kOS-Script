@@ -8,8 +8,6 @@ FUNCTION executerNode {
         RETURN.
     }
 
-    PRINT("ExecuteNode() entered").
-
     LOCAL noeud IS NEXTNODE.
     LOCAL dvTotal IS noeud:DELTAV:MAG.
     LOCAL acc IS accelMax().
