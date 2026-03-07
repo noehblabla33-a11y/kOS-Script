@@ -33,3 +33,28 @@ FUNCTION dureeFreinage {
     LOCAL vit IS SHIP:VELOCITY:SURFACE:MAG.
     RETURN vit / dec.
 }
+
+// Vitesse orbitale circulaire a une altitude donnee
+FUNCTION vitOrbiteCible {
+    PARAMETER altCible.
+    LOCAL ray IS BODY:RADIUS + altCible.
+    RETURN SQRT(BODY:MU / ray).
+}
+
+// Angle de phase vers TARGET dans le sens orbital (0-360)
+FUNCTION anglePhase {
+    LOCAL posNav IS SHIP:POSITION - BODY:POSITION.
+    LOCAL posCib IS TARGET:POSITION - BODY:POSITION.
+    LOCAL angle IS VANG(posNav, posCib).
+    LOCAL momAng IS VCRS(posNav, SHIP:VELOCITY:ORBIT).
+    LOCAL croix IS VCRS(posNav, posCib).
+    IF VDOT(croix, momAng) > 0 {
+        RETURN angle.
+    }
+    RETURN 360 - angle.
+}
+
+// Excentricite de l'orbite actuelle
+FUNCTION excentricite {
+    RETURN SHIP:ORBIT:ECCENTRICITY.
+}
