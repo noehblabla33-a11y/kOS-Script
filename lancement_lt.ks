@@ -14,13 +14,6 @@ FUNCTION pitchPrograde {
     RETURN 90 - VANG(SHIP:SRFPROGRADE:VECTOR, UP:VECTOR).
 }
 
-// Vitesse orbitale cible pour orbite circulaire
-FUNCTION vitOrbiteCible {
-    PARAMETER altCible.
-    LOCAL ray IS BODY:RADIUS + altCible.
-    RETURN SQRT(BODY:MU / ray).
-}
-
 CLEARSCREEN.
 PRINT "--- LANCEMENT APO ---" AT (0, 0).
 PRINT "Cap: " + capLancement + " deg" AT (0, 1).
