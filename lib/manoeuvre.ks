@@ -8,6 +8,8 @@ FUNCTION executerNode {
         RETURN.
     }
 
+    PRINT("ExecuteNode() entered").
+
     LOCAL noeud IS NEXTNODE.
     LOCAL dvTotal IS noeud:DELTAV:MAG.
     LOCAL acc IS accelMax().
@@ -23,9 +25,15 @@ FUNCTION executerNode {
 
     // Warp jusqu'a T - dureeBurn/2
     LOCAL tempsIgnition IS TIME:SECONDS + noeud:ETA - dureeBurn / 2.
-    IF tempsIgnition - TIME:SECONDS > 10 {
-        KUNIVERSE:TIMEWARP:WARPTO(tempsIgnition - 5).
+    IF tempsIgnition - TIME:SECONDS > 30 {
+        KUNIVERSE:TIMEWARP:WARPTO(tempsIgnition - 20).
+        WAIT UNTIL KUNIVERSE:TIMEWARP:ISSETTLED.
     }
+
+    // Reorienter apres warp
+    LOCK STEERING TO noeud:DELTAV.
+    WAIT UNTIL VANG(SHIP:FACING:VECTOR, noeud:DELTAV) < 1.
+
     WAIT UNTIL TIME:SECONDS >= tempsIgnition.
 
     // Burn
