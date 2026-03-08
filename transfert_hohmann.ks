@@ -1,5 +1,5 @@
 // Transfert vers une lune et capture en orbite
-// Usage: RUN transfert_lune. ou RUN transfert_lune("Mun").
+// Usage: RUN transfert_hohmann. ou RUN transfert_hohmann("Mun").
 
 PARAMETER nomCible IS "Mun".
 
@@ -65,61 +65,104 @@ LOCAL tempsNode IS TIME:SECONDS + tempsFenetre.
 PRINT "Fenetre dans: " + ROUND(tempsFenetre) + " s" AT (0,5).
 PRINT "---" AT (0,6).
 
-// === CREATION NODE AU BON MOMENT ===
+// === CREATION NODE ===
 PRINT "Phase: attente fenetre " AT (0,8).
 
 LOCAL noeudTransf IS NODE(tempsNode, 0, 0, dvTransf).
 ADD noeudTransf.
 
 // === AJUSTEMENT FIN ===
-// Ajuster le node prograde pour obtenir une encounter
-LOCAL ajustement IS 0.
-LOCAL pas IS 1.
+PRINT "Phase: ajustement node " AT (0,8).
+
+LOCAL pas IS 5.
 LOCAL meilleurPe IS 999999999.
+LOCAL tentative IS 0.
 
 IF SHIP:ORBIT:HASNEXTPATCH {
     SET meilleurPe TO SHIP:ORBIT:NEXTPATCH:PERIAPSIS.
 }
 
-// Chercher l'encounter ou ameliorer le periapsis cible
-LOCAL tentative IS 0.
-UNTIL tentative > 40 {
-    // Essayer +pas puis -pas
+// Etape 1 : balayage en prograde
+UNTIL tentative > 60 OR pas < 0.05 {
+    LOCAL ameliore IS FALSE.
+
     SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE + pas.
     IF SHIP:ORBIT:HASNEXTPATCH {
         LOCAL nouvPe IS SHIP:ORBIT:NEXTPATCH:PERIAPSIS.
         IF nouvPe > 0 AND nouvPe < meilleurPe {
             SET meilleurPe TO nouvPe.
-            SET tentative TO tentative + 1.
+            SET ameliore TO TRUE.
         } ELSE {
-            // Annuler et essayer l'autre sens
-            SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE - 2 * pas.
-            IF SHIP:ORBIT:HASNEXTPATCH {
-                SET nouvPe TO SHIP:ORBIT:NEXTPATCH:PERIAPSIS.
-                IF nouvPe > 0 AND nouvPe < meilleurPe {
-                    SET meilleurPe TO nouvPe.
-                    SET tentative TO tentative + 1.
-                } ELSE {
-                    SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE + pas.
-                    SET pas TO pas / 2.
-                    SET tentative TO tentative + 1.
-                }
-            } ELSE {
-                SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE + pas.
-                SET pas TO pas / 2.
-                SET tentative TO tentative + 1.
-            }
+            SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE - pas.
         }
     } ELSE {
-        // Pas d'encounter, annuler
         SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE - pas.
-        SET pas TO pas / 2.
-        SET tentative TO tentative + 1.
     }
 
-    IF pas < 0.01 BREAK.
+    IF NOT ameliore {
+        SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE - pas.
+        IF SHIP:ORBIT:HASNEXTPATCH {
+            LOCAL nouvPe IS SHIP:ORBIT:NEXTPATCH:PERIAPSIS.
+            IF nouvPe > 0 AND nouvPe < meilleurPe {
+                SET meilleurPe TO nouvPe.
+                SET ameliore TO TRUE.
+            } ELSE {
+                SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE + pas.
+            }
+        } ELSE {
+            SET noeudTransf:PROGRADE TO noeudTransf:PROGRADE + pas.
+        }
+    }
+
+    IF NOT ameliore {
+        SET pas TO pas / 2.
+    }
+
+    SET tentative TO tentative + 1.
 }
 
+// Etape 2 : balayage en timing
+SET pas TO 10.
+SET tentative TO 0.
+UNTIL tentative > 40 OR pas < 0.5 {
+    LOCAL ameliore IS FALSE.
+
+    SET noeudTransf:ETA TO noeudTransf:ETA + pas.
+    IF SHIP:ORBIT:HASNEXTPATCH {
+        LOCAL nouvPe IS SHIP:ORBIT:NEXTPATCH:PERIAPSIS.
+        IF nouvPe > 0 AND nouvPe < meilleurPe {
+            SET meilleurPe TO nouvPe.
+            SET ameliore TO TRUE.
+        } ELSE {
+            SET noeudTransf:ETA TO noeudTransf:ETA - pas.
+        }
+    } ELSE {
+        SET noeudTransf:ETA TO noeudTransf:ETA - pas.
+    }
+
+    IF NOT ameliore {
+        SET noeudTransf:ETA TO noeudTransf:ETA - pas.
+        IF SHIP:ORBIT:HASNEXTPATCH {
+            LOCAL nouvPe IS SHIP:ORBIT:NEXTPATCH:PERIAPSIS.
+            IF nouvPe > 0 AND nouvPe < meilleurPe {
+                SET meilleurPe TO nouvPe.
+                SET ameliore TO TRUE.
+            } ELSE {
+                SET noeudTransf:ETA TO noeudTransf:ETA + pas.
+            }
+        } ELSE {
+            SET noeudTransf:ETA TO noeudTransf:ETA + pas.
+        }
+    }
+
+    IF NOT ameliore {
+        SET pas TO pas / 2.
+    }
+
+    SET tentative TO tentative + 1.
+}
+
+// === RESULTAT AJUSTEMENT ===
 IF NOT SHIP:ORBIT:HASNEXTPATCH {
     PRINT "Pas d'encounter trouvee!" AT (0,10).
     PRINT "Verifier le node sur la map." AT (0,11).

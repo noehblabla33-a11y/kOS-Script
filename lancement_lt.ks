@@ -1,5 +1,4 @@
 // Lancement low-thrust avec pitch guide et PID sur ETA:APOAPSIS
-// Pitch interpole de 80 a 45 deg entre 0 et ~10 km, garde-fou AoA.
 // Compatible Kerbalism (throttle plancher, pas de coupure moteur).
 // Usage: RUN lancement. ou RUN lancement(90, 80000, 45).
 
