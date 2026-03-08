@@ -68,26 +68,55 @@ PRINT "Lancement dans: " + ROUND(delaiLancement) + " s"
     + " (" + ROUND(delaiLancement / 60, 1) + " min)" AT (0, 13).
 
 // === ATTENTE FENETRE ===
-IF delaiLancement > 120 {
-    PRINT "Warp..." AT (0, 15).
-    KUNIVERSE:TIMEWARP:WARPTO(TIME:SECONDS + delaiLancement - 45).
+IF delaiLancement > 30 {
+    // Pas de WARPTO sur le pas de tir : les clamps + physics warp = catastrophe
+    // On utilise le warp rails manuellement, palier par palier
+    PRINT "Attente fenetre...     " AT (0, 15).
+
+    LOCAL tempsCible IS TIME:SECONDS + delaiLancement - 45.
+
+    // Paliers de warp rails (indices kOS: 0=1x, 1=5x, 2=10x, 3=50x, 4=100x...)
+    UNTIL TIME:SECONDS >= tempsCible {
+        LOCAL reste IS tempsCible - TIME:SECONDS.
+        LOCAL palier IS 0.
+        IF reste > 600     SET palier TO 4.
+        ELSE IF reste > 120 SET palier TO 3.
+        ELSE IF reste > 30  SET palier TO 2.
+        ELSE IF reste > 10  SET palier TO 1.
+
+        SET KUNIVERSE:TIMEWARP:WARP TO palier.
+        PRINT "T-" + ROUND(reste) + " s  (x" + KUNIVERSE:TIMEWARP:RATE + ")   " AT (0, 16).
+        WAIT 0.2.
+    }
+
+    SET KUNIVERSE:TIMEWARP:WARP TO 0.
     WAIT UNTIL KUNIVERSE:TIMEWARP:ISSETTLED.
+    PRINT "                                   " AT (0, 16).
 }
 
 // Attente fine avec suivi de l'angle hors-plan
-LOCAL normOrb IS normaleOrbCible().
-LOCAL seuilPlan IS 0.015.   // ~0.9 deg
+// normOrb est recalculee a chaque iteration (la cible bouge apres warp)
+LOCAL seuilPlan IS 1.7.     // degres
+LOCAL limiteTemps IS TIME:SECONDS + 600.    // timeout 10 min
 
-UNTIL ABS(VDOT((SHIP:POSITION - BODY:POSITION):NORMALIZED, normOrb)) < seuilPlan {
-    LOCAL angleHP IS ARCSIN(
-        MIN(1, MAX(-1, VDOT((SHIP:POSITION - BODY:POSITION):NORMALIZED, normOrb)))
-    ).
+LOCAL angleHP IS 99.
+
+UNTIL ABS(angleHP) < seuilPlan OR TIME:SECONDS > limiteTemps {
+    LOCAL normOrb IS normaleOrbCible().
+    LOCAL projSite IS VDOT((SHIP:POSITION - BODY:POSITION):NORMALIZED, normOrb).
+    SET angleHP TO ARCSIN(MAX(-1, MIN(1, projSite))).
     PRINT "Hors-plan: " + ROUND(angleHP, 2) + " deg   " AT (0, 15).
     WAIT 0.5.
 }
 
-bipOk().
+IF TIME:SECONDS > limiteTemps {
+    PRINT "Timeout! Lancement au mieux." AT (0, 16).
+    bipErreur().
+} ELSE {
+    bipOk().
+}
+
 PRINT "Fenetre! Lancement...              " AT (0, 15).
 
 // === DELEGATION AU SCRIPT DE MONTEE ===
-RUNPATH("0:/lancement_lt", capLancement, apoapseCible).
+RUNPATH("0:/lancement_peg", capLancement, apoapseCible).

@@ -1,6 +1,7 @@
-// Lancement low-thrust avec pitch guide et PID sur ETA:APOAPSIS
-// Compatible Kerbalism (throttle plancher, pas de coupure moteur).
-// Usage: RUN lancement. ou RUN lancement(90, 80000, 45).
+// Lancement low-thrust avec circularisation continue
+// Une seule ignition du decollage a l'orbite circulaire.
+// Compatible Kerbalism (throttle plancher, ignition unique).
+// Usage: RUN lancement_lt. ou RUN lancement_lt(90, 80000, 45).
 
 PARAMETER capLancement IS 90.
 PARAMETER apoapseCible IS 80000.
@@ -17,21 +18,19 @@ LOCAL pitchFinGuide IS 45.
 LOCAL altFinGuide IS 10000.
 LOCAL aoaMax IS 5.
 LOCAL altTransOrb IS 35000.
-LOCAL throttlePlancher IS 0.15.
+LOCAL throttlePlancher IS 0.01.
+LOCAL toleranceCirc IS 2000.
 
 // --- Fonctions ---
 
-// Pitch prograde par rapport a l'horizon
 FUNCTION pitchPrograde {
     RETURN 90 - VANG(SHIP:SRFPROGRADE:VECTOR, UP:VECTOR).
 }
 
-// Angle d'attaque par rapport au prograde surface
 FUNCTION angleAttaque {
     RETURN VANG(SHIP:FACING:VECTOR, SHIP:SRFPROGRADE:VECTOR).
 }
 
-// Pitch cible interpole lineairement selon l'altitude
 FUNCTION pitchGuide {
     LOCAL fraction IS MIN(1, MAX(0, SHIP:ALTITUDE / altFinGuide)).
     RETURN pitchDepart - (pitchDepart - pitchFinGuide) * fraction.
@@ -61,7 +60,7 @@ PRINT "Phase: verticale       " AT (0, 5).
 WAIT UNTIL SHIP:AIRSPEED > seuilVitesse.
 
 // === PHASE 2 : kick initial ===
-PRINT "Phase: kick      " AT (0, 5).
+PRINT "Phase: kick            " AT (0, 5).
 LOCK STEERING TO HEADING(capLancement, pitchDepart).
 bipOk().
 
@@ -76,16 +75,11 @@ LOCAL enPrograde IS FALSE.
 UNTIL SHIP:ALTITUDE >= altFinGuide {
     LOCAL pitchCmd IS pitchGuide().
 
-    // Garde-fou AoA : si on force trop, on lache sur le prograde
     IF angleAttaque() > aoaMax {
-        IF NOT enPrograde {
-            SET enPrograde TO TRUE.
-        }
+        IF NOT enPrograde SET enPrograde TO TRUE.
         LOCK STEERING TO SHIP:SRFPROGRADE.
     } ELSE {
-        IF enPrograde {
-            SET enPrograde TO FALSE.
-        }
+        IF enPrograde SET enPrograde TO FALSE.
         LOCK STEERING TO HEADING(capLancement, pitchCmd).
     }
 
@@ -107,7 +101,7 @@ SET poussee TO 1.
 
 WAIT UNTIL ETA:APOAPSIS >= etaCible - 5.
 
-// === PHASE 6 : croisiere PID ===
+// === PHASE 6 : croisiere PID throttle ===
 PRINT "Phase: croisiere PID   " AT (0, 5).
 bipOk().
 
@@ -125,15 +119,40 @@ UNTIL SHIP:APOAPSIS >= apoapseCible {
     }
 
     SET poussee TO pidThrottle:UPDATE(TIME:SECONDS, ETA:APOAPSIS).
-    IF poussee < throttlePlancher {
-        SET poussee TO throttlePlancher.
-    }
+    IF poussee < throttlePlancher SET poussee TO throttlePlancher.
 
     PRINT "Apo: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km   " AT (0, 7).
     PRINT "Alt: " + ROUND(SHIP:ALTITUDE / 1000, 1) + " km   " AT (0, 8).
     PRINT "Vit: " + ROUND(SHIP:AIRSPEED) + " m/s   " AT (0, 9).
     PRINT "ETA apo: " + ROUND(ETA:APOAPSIS, 1) + " s   " AT (0, 10).
     PRINT "Throttle: " + ROUND(poussee * 100) + " %   " AT (0, 11).
+    WAIT 0.1.
+}
+
+// === PHASE 7 : circularisation continue ===
+// Bruler fort pres de l'apo (monte le peri), rien loin (evite gonfler l'apo).
+PRINT "Phase: circularisation " AT (0, 5).
+bipOk().
+
+LOCK STEERING TO SHIP:PROGRADE.
+
+UNTIL SHIP:PERIAPSIS >= apoapseCible - toleranceCirc {
+    // Modulation par position orbitale : cos = 1 a l'apo, 0 a 90 deg, -1 au peri
+    LOCAL fractionOrb IS ETA:APOAPSIS / SHIP:ORBIT:PERIOD.
+    LOCAL modulateur IS MAX(0.01, COS(fractionOrb * 360)).
+
+    // Freiner si l'apo depasse la cible (1 km au-dessus -> correction de 20%)
+    LOCAL erreurApo IS (SHIP:APOAPSIS - apoapseCible) / 1000.
+    LOCAL correction IS MAX(0, 1 - erreurApo * 0.2).
+
+    SET poussee TO modulateur * correction.
+
+    PRINT "Apo: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km   " AT (0, 7).
+    PRINT "Per: " + ROUND(SHIP:PERIAPSIS / 1000, 1) + " km   " AT (0, 8).
+    PRINT "Alt: " + ROUND(SHIP:ALTITUDE / 1000, 1) + " km   " AT (0, 9).
+    PRINT "Ecc: " + ROUND(SHIP:ORBIT:ECCENTRICITY, 4) AT (0, 10).
+    PRINT "Throttle: " + ROUND(poussee * 100) + " %   " AT (0, 11).
+    PRINT "ETA apo: " + ROUND(ETA:APOAPSIS) + " s   " AT (0, 12).
     WAIT 0.1.
 }
 
@@ -144,5 +163,9 @@ UNLOCK THROTTLE.
 arreterAutoStaging().
 
 bipDouble().
-PRINT "Apo atteinte: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km" AT (0, 13).
-PRINT "En attente circularisation." AT (0, 14).
+WAIT 0.5.
+bipDouble().
+
+PRINT "Orbite circulaire!" AT (0, 13).
+PRINT "Apo: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km" AT (0, 14).
+PRINT "Per: " + ROUND(SHIP:PERIAPSIS / 1000, 1) + " km" AT (0, 15).

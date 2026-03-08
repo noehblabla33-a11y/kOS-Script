@@ -1,4 +1,5 @@
 // Circularisation a l'apoapsis ou au periapsis
+// Gere les orbites hyperboliques (capture).
 // Usage: RUN circularisation. ou RUN circularisation("per").
 
 PARAMETER mode IS "apo".
@@ -15,6 +16,13 @@ PRINT "--- CIRCULARISATION ---" AT (0, 0).
 IF BODY:ATM:EXISTS AND SHIP:ALTITUDE < BODY:ATM:HEIGHT {
     PRINT "Attente sortie atmosphere..." AT (0, 1).
     WAIT UNTIL SHIP:ALTITUDE > BODY:ATM:HEIGHT.
+}
+
+// Orbite hyperbolique: pas d'apoapsis valide, forcer periapsis
+IF SHIP:ORBIT:ECCENTRICITY >= 1 AND mode = "apo" {
+    SET mode TO "per".
+    PRINT "Orbite hyperbolique -> periapsis" AT (0, 1).
+    bipOk().
 }
 
 LOCAL demiAxe IS SHIP:ORBIT:SEMIMAJORAXIS.
@@ -42,17 +50,18 @@ LOCAL vitCirc IS SQRT(BODY:MU / rayPoint).
 // Delta-v pour circulariser
 LOCAL dvCirc IS vitCirc - vitPoint.
 
-PRINT "Mode: " + labelPoint AT (0, 1).
-PRINT "Apo: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km" AT (0, 2).
-PRINT "Per: " + ROUND(SHIP:PERIAPSIS / 1000, 1) + " km" AT (0, 3).
-PRINT "Dv circ: " + ROUND(dvCirc, 1) + " m/s" AT (0, 4).
-PRINT "---" AT (0, 5).
+PRINT "Mode: " + labelPoint AT (0, 2).
+PRINT "Ecc: " + ROUND(SHIP:ORBIT:ECCENTRICITY, 3) AT (0, 3).
+PRINT "Apo: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km" AT (0, 4).
+PRINT "Per: " + ROUND(SHIP:PERIAPSIS / 1000, 1) + " km" AT (0, 5).
+PRINT "Dv circ: " + ROUND(dvCirc, 1) + " m/s" AT (0, 6).
+PRINT "---" AT (0, 7).
 
 // Creer le node
 LOCAL noeud IS NODE(TIME:SECONDS + etaPoint, 0, 0, dvCirc).
 ADD noeud.
 
-PRINT "Node cree a " + labelPoint + "." AT (0, 6).
+PRINT "Node cree a " + labelPoint + "." AT (0, 8).
 
 // Executer
 demarrerAutoStaging().
