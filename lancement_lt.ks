@@ -1,5 +1,5 @@
 // Lancement low-thrust avec pitch guide et PID sur ETA:APOAPSIS
-// Pitch interpole de 85 a 45 deg entre 0 et ~10 km, garde-fou AoA.
+// Pitch interpole de 80 a 45 deg entre 0 et ~10 km, garde-fou AoA.
 // Compatible Kerbalism (throttle plancher, pas de coupure moteur).
 // Usage: RUN lancement. ou RUN lancement(90, 80000, 45).
 
@@ -13,7 +13,7 @@ RUNONCEPATH("0:/lib/staging.ks").
 
 // --- Constantes ---
 LOCAL seuilVitesse IS 65.
-LOCAL pitchDepart IS 85.
+LOCAL pitchDepart IS 80.
 LOCAL pitchFinGuide IS 45.
 LOCAL altFinGuide IS 10000.
 LOCAL aoaMax IS 5.
@@ -62,7 +62,7 @@ PRINT "Phase: verticale       " AT (0, 5).
 WAIT UNTIL SHIP:AIRSPEED > seuilVitesse.
 
 // === PHASE 2 : kick initial ===
-PRINT "Phase: kick 85 deg     " AT (0, 5).
+PRINT "Phase: kick      " AT (0, 5).
 LOCK STEERING TO HEADING(capLancement, pitchDepart).
 bipOk().
 
