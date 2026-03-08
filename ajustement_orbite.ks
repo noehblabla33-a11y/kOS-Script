@@ -18,7 +18,6 @@ RUNONCEPATH("0:/lib/staging.ks").
 
 // Dv vis-viva pour changer un apse depuis le point oppose
 // rayBurn : rayon au point de burn
-// rayActuel : rayon de l'apse qu'on veut garder (= rayBurn)
 // rayAvant : rayon de l'apse a changer (avant manoeuvre)
 // rayApres : rayon de l'apse a changer (apres manoeuvre)
 FUNCTION dvVisViva {
@@ -166,25 +165,44 @@ IF mode = "apo" {
 } ELSE IF mode = "both" {
     PRINT "Cible: circ a " + ROUND(altCible / 1000, 1) + " km" AT (0,4).
 
-    // Burn 1 : amener l'apo a la cible (burn au peri)
-    PRINT "--- Burn 1/2 : apo ---" AT (0,5).
-    executerAjustement(altCible, "apo").
+    // Ordre des burns selon la position de la cible par rapport a l'orbite
+    // Si cible < periapsis : baisser per d'abord (burn a l'apo), puis apo (burn au per)
+    // Sinon : ajuster apo d'abord (burn au per), puis per (burn a l'apo)
+    IF altCible < SHIP:PERIAPSIS {
+        PRINT "--- Burn 1/2 : per ---" AT (0,5).
+        executerAjustement(altCible, "per").
 
-    // Attente demi-orbite
-    PRINT "Phase: coast           " AT (0,8).
-    PRINT "                           " AT (0,9).
-    PRINT "                           " AT (0,10).
-    PRINT "                           " AT (0,11).
+        PRINT "Phase: coast           " AT (0,8).
+        PRINT "                           " AT (0,9).
+        PRINT "                           " AT (0,10).
+        PRINT "                           " AT (0,11).
 
-    IF ETA:APOAPSIS > 60 {
-        KUNIVERSE:TIMEWARP:WARPTO(TIME:SECONDS + ETA:APOAPSIS - 30).
-        WAIT UNTIL KUNIVERSE:TIMEWARP:ISSETTLED.
+        IF ETA:PERIAPSIS > 60 {
+            KUNIVERSE:TIMEWARP:WARPTO(TIME:SECONDS + ETA:PERIAPSIS - 30).
+            WAIT UNTIL KUNIVERSE:TIMEWARP:ISSETTLED.
+        }
+
+        PRINT "--- Burn 2/2 : apo ---" AT (0,5).
+        PRINT "                       " AT (0,6).
+        executerAjustement(altCible, "apo").
+    } ELSE {
+        PRINT "--- Burn 1/2 : apo ---" AT (0,5).
+        executerAjustement(altCible, "apo").
+
+        PRINT "Phase: coast           " AT (0,8).
+        PRINT "                           " AT (0,9).
+        PRINT "                           " AT (0,10).
+        PRINT "                           " AT (0,11).
+
+        IF ETA:APOAPSIS > 60 {
+            KUNIVERSE:TIMEWARP:WARPTO(TIME:SECONDS + ETA:APOAPSIS - 30).
+            WAIT UNTIL KUNIVERSE:TIMEWARP:ISSETTLED.
+        }
+
+        PRINT "--- Burn 2/2 : per ---" AT (0,5).
+        PRINT "                       " AT (0,6).
+        executerAjustement(altCible, "per").
     }
-
-    // Burn 2 : amener le peri a la cible (burn a l'apo)
-    PRINT "--- Burn 2/2 : per ---" AT (0,5).
-    PRINT "                       " AT (0,6).
-    executerAjustement(altCible, "per").
 } ELSE {
     PRINT "Mode inconnu: " + mode AT (0,4).
     PRINT "Modes: apo, per, both" AT (0,5).
