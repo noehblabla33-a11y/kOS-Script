@@ -5,10 +5,17 @@ PARAMETER mode IS "apo".
 
 RUNONCEPATH("0:/lib/bip.ks").
 RUNONCEPATH("0:/lib/nav.ks").
+RUNONCEPATH("0:/lib/staging.ks").
 RUNONCEPATH("0:/lib/manoeuvre.ks").
 
 CLEARSCREEN.
 PRINT "--- CIRCULARISATION ---" AT (0, 0).
+
+// Attendre la sortie d'atmosphere si necessaire
+IF BODY:ATM:EXISTS AND SHIP:ALTITUDE < BODY:ATM:HEIGHT {
+    PRINT "Attente sortie atmosphere..." AT (0, 1).
+    WAIT UNTIL SHIP:ALTITUDE > BODY:ATM:HEIGHT.
+}
 
 LOCAL demiAxe IS SHIP:ORBIT:SEMIMAJORAXIS.
 
@@ -48,7 +55,9 @@ ADD noeud.
 PRINT "Node cree a " + labelPoint + "." AT (0, 6).
 
 // Executer
+demarrerAutoStaging().
 executerNode().
+arreterAutoStaging().
 
 PRINT "Orbite finale:" AT (0, 11).
 PRINT "Apo: " + ROUND(SHIP:APOAPSIS / 1000, 1) + " km" AT (0, 12).
