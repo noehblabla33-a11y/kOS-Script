@@ -7,9 +7,6 @@
 // telle que le vehicule atteigne l'etat orbital cible (rayon, vRad, vTan)
 // au moment de la coupure moteur, en temps T.
 //
-// Le solveur itere sur T via la contrainte tangentielle, et resout
-// un systeme lineaire 2x2 pour (A, B) via les contraintes radiales.
-//
 // Necessite: aucune dependance (autonome).
 
 // === ETAT GLOBAL DU GUIDAGE ===
@@ -20,11 +17,12 @@ GLOBAL pegTgo IS 0.
 GLOBAL pegTempsRef IS 0.
 
 // Parametres internes
-LOCAL _pegIterMax IS 20.
-LOCAL _pegTolConverge IS 0.5.
-LOCAL _pegAmortissement IS 0.5.
-LOCAL _pegCoefAMax IS 0.5.
-LOCAL _pegCoefBMax IS 0.1.
+LOCAL _pegIterMax IS 25.
+LOCAL _pegTolConverge IS 0.4.
+LOCAL _pegAmortissement IS 0.4.
+// Bornes sur les coefficients : A=0.4 <=> ~23 deg max de braquage radial
+LOCAL _pegCoefAMax IS 0.4.
+LOCAL _pegCoefBMax IS 0.08.
 
 // === PARAMETRES VEHICULE ===
 FUNCTION paramVehicule {
@@ -115,23 +113,23 @@ FUNCTION cyclePeg {
     LOCAL _ve IS _veh["ve"].
     LOCAL _tau IS _veh["tau"].
 
-    // Deja au-dela de la vitesse cible : PEG ne sait pas freiner
+    // Deja au-dela de la vitesse cible
     IF _vt >= vitTanCib {
         SET pegConverge TO FALSE.
         RETURN FALSE.
     }
 
-    // Gravite effective moyenne (gravite - centripete)
+    // Gravite effective moyenne
     LOCAL _rMoy IS (_r + rayonCib) / 2.
     LOCAL _vtMoy IS (_vt + vitTanCib) / 2.
     LOCAL _gEff IS BODY:MU / _rMoy^2 - _vtMoy^2 / _rMoy.
 
-    // Estimation initiale de T si non amorce
+    // Estimation initiale de T
     IF pegTgo < 1 {
         LOCAL _dvEst IS SQRT((vitTanCib - _vt)^2 + (vitRadCib - _vr)^2).
-        SET _dvEst TO MAX(5, _dvEst).
+        SET _dvEst TO MAX(10, _dvEst).
         SET pegTgo TO _tau * (1 - CONSTANT:E ^ (-_dvEst / _ve)).
-        SET pegTgo TO MAX(3, MIN(pegTgo, _tau * 0.85)).
+        SET pegTgo TO MAX(5, MIN(pegTgo, _tau * 0.85)).
     }
 
     LOCAL _tEst IS MIN(pegTgo, _tau * 0.9).
@@ -141,7 +139,7 @@ FUNCTION cyclePeg {
 
     FROM { LOCAL _it IS 0. } UNTIL _it >= _pegIterMax OR _converge
     STEP { SET _it TO _it + 1. } DO {
-        SET _tEst TO MAX(1, MIN(_tEst, _tau * 0.9)).
+        SET _tEst TO MAX(2, MIN(_tEst, _tau * 0.9)).
 
         LOCAL _integ IS integralesPoussee(_ve, _tau, _tEst).
         LOCAL _b0 IS _integ["b0"].
@@ -156,23 +154,28 @@ FUNCTION cyclePeg {
         IF ABS(_det) < 0.01 {
             SET _tEst TO _tEst * 1.05.
         } ELSE {
-            SET _aCalc TO (_c1 * _qr - _b1 * _sr) / _det.
-            SET _bCalc TO (_b0 * _sr - _c0 * _qr) / _det.
+            LOCAL _aRaw IS (_c1 * _qr - _b1 * _sr) / _det.
+            LOCAL _bRaw IS (_b0 * _sr - _c0 * _qr) / _det.
 
-            // Bornage strict des coefficients
-            SET _aCalc TO MAX(-_pegCoefAMax, MIN(_pegCoefAMax, _aCalc)).
-            SET _bCalc TO MAX(-_pegCoefBMax, MIN(_pegCoefBMax, _bCalc)).
+            // Si les coefficients bruts explosent, la situation est
+            // hors domaine PEG — abandonner proprement
+            IF ABS(_aRaw) > 2 OR ABS(_bRaw) > 1 {
+                SET pegConverge TO FALSE.
+                RETURN FALSE.
+            }
 
-            // Contrainte tangentielle -> mise a jour de T
+            SET _aCalc TO MAX(-_pegCoefAMax, MIN(_pegCoefAMax, _aRaw)).
+            SET _bCalc TO MAX(-_pegCoefBMax, MIN(_pegCoefBMax, _bRaw)).
+
             LOCAL _frMoy IS _aCalc + _bCalc * _tEst / 2.
-            SET _frMoy TO MAX(-0.9, MIN(0.9, _frMoy)).
+            SET _frMoy TO MAX(-0.4, MIN(0.4, _frMoy)).
             LOCAL _ftMoy IS SQRT(MAX(0.01, 1 - _frMoy^2)).
             LOCAL _dvTanNec IS vitTanCib - _vt.
 
-            IF _ftMoy > 0.05 AND _dvTanNec > 0 {
+            IF _ftMoy > 0.1 AND _dvTanNec > 0 {
                 LOCAL _b0Nec IS _dvTanNec / _ftMoy.
                 LOCAL _tNouv IS _tau * (1 - CONSTANT:E ^ (-_b0Nec / _ve)).
-                SET _tNouv TO MAX(1, MIN(_tNouv, _tau * 0.9)).
+                SET _tNouv TO MAX(2, MIN(_tNouv, _tau * 0.9)).
 
                 IF ABS(_tNouv - _tEst) < _pegTolConverge {
                     SET _converge TO TRUE.
@@ -182,11 +185,8 @@ FUNCTION cyclePeg {
         }
     }
 
-    // Validation finale : rejeter solutions incoherentes
-    IF ABS(_aCalc) >= _pegCoefAMax AND ABS(_bCalc) >= _pegCoefBMax * 0.8 {
-        SET _converge TO FALSE.
-    }
-    IF _tEst < 1 {
+    // Validation : si les coefficients sont aux bornes, c'est suspect
+    IF ABS(_aCalc) >= _pegCoefAMax * 0.99 {
         SET _converge TO FALSE.
     }
 
@@ -204,7 +204,7 @@ FUNCTION dirPeg {
     LOCAL _etat IS etatPlanOrb().
     LOCAL _dt IS TIME:SECONDS - pegTempsRef.
     LOCAL _fr IS pegCoefA + pegCoefB * _dt.
-    SET _fr TO MAX(-0.5, MIN(0.5, _fr)).
+    SET _fr TO MAX(-_pegCoefAMax, MIN(_pegCoefAMax, _fr)).
     LOCAL _ft IS SQRT(MAX(0.01, 1 - _fr^2)).
     RETURN _fr * _etat["unitRad"] + _ft * _etat["unitTan"].
 }
@@ -215,7 +215,6 @@ FUNCTION tgoEstime {
 }
 
 // === REINITIALISATION DOUCE (post-staging) ===
-// Conserve Tgo pour aider la reconvergence.
 FUNCTION reinitPegDoux {
     SET pegConverge TO FALSE.
     SET pegCoefA TO 0.
@@ -233,12 +232,30 @@ FUNCTION reinitPeg {
 }
 
 // === DETECTION DEPASSEMENT ===
-// TRUE si le vehicule a deja depasse l'orbite cible
-// (vitesse > circulaire, ou trajectoire hyperbolique).
 FUNCTION pegDepassement {
     PARAMETER vitTanCib.
     LOCAL _etat IS etatPlanOrb().
     IF _etat["vitTan"] >= vitTanCib RETURN TRUE.
     IF SHIP:ORBIT:ECCENTRICITY >= 1 RETURN TRUE.
     RETURN FALSE.
+}
+
+// === DIAGNOSTIC : L'ETAT EST-IL PEG-COMPATIBLE ? ===
+// Verifie que la trajectoire est assez "plate" pour PEG.
+// ratioVr = |vitesse radiale| / vitesse tangentielle
+// Un ratio < 0.3 signifie que la fusee est quasi-horizontale.
+FUNCTION pegEtatPret {
+    PARAMETER apoapseCib.
+    LOCAL _etat IS etatPlanOrb().
+    LOCAL _vt IS _etat["vitTan"].
+    LOCAL _vr IS _etat["vitRad"].
+    IF _vt < 100 RETURN FALSE.
+    LOCAL _ratio IS ABS(_vr) / _vt.
+    // Trajectoire trop verticale
+    IF _ratio > 0.3 RETURN FALSE.
+    // Apoapsis trop loin de la cible (> 130%)
+    IF SHIP:APOAPSIS > apoapseCib * 1.3 RETURN FALSE.
+    // Apoapsis trop basse (< 50%)
+    IF SHIP:APOAPSIS < apoapseCib * 0.5 RETURN FALSE.
+    RETURN TRUE.
 }

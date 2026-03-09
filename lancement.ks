@@ -32,7 +32,7 @@ demarrerAutoStaging().
 
 // Montee verticale
 PRINT "Phase: verticale" AT (0, 5).
-WAIT UNTIL SHIP:AIRSPEED > 65.
+WAIT UNTIL SHIP:AIRSPEED > 50.
 
 // Gravity turn : pitch 85, cap vers direction choisie
 PRINT "Phase: gravity turn    " AT (0, 5).

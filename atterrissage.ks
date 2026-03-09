@@ -82,6 +82,10 @@ LOCAL dvDeorbit IS vOrbite - vTransfert.
 
 PRINT "Dv deorbit: " + ROUND(dvDeorbit, 1) + " m/s" AT (0,7).
 
+// Adapter la poussee pour que le burn dure au moins 8 secondes
+LOCAL pctLim IS limitePoussee(dvDeorbit, 8).
+PRINT "Thrust: " + pctLim + " %     " AT (0,8).
+
 LOCK STEERING TO RETROGRADE.
 WAIT UNTIL VANG(SHIP:FACING:VECTOR, RETROGRADE:VECTOR) < 2.
 bipOk().
@@ -90,8 +94,19 @@ LOCAL vitDep IS SHIP:VELOCITY:ORBIT:MAG.
 LOCK THROTTLE TO 1.
 WAIT UNTIL vitDep - SHIP:VELOCITY:ORBIT:MAG >= dvDeorbit.
 LOCK THROTTLE TO 0.
+restaurerPoussee().
 
-PRINT "PE: " + ROUND(SHIP:PERIAPSIS) + " m   " AT (0,8).
+// Securite: verifier que le PE n'est pas dans le sol
+IF SHIP:PERIAPSIS < 500 {
+    PRINT "PE trop bas: " + ROUND(SHIP:PERIAPSIS) + " m!" AT (0,9).
+    PRINT "Burn trop fort, abort." AT (0,10).
+    UNLOCK THROTTLE.
+    bipErreur().
+}
+
+IF SHIP:PERIAPSIS >= 500 {
+
+PRINT "PE: " + ROUND(SHIP:PERIAPSIS) + " m   " AT (0,9).
 UNLOCK THROTTLE.
 bipDouble().
 
@@ -112,8 +127,12 @@ LOCK STEERING TO SRFRETROGRADE.
 // Attendre d'etre en descente
 WAIT UNTIL SHIP:VERTICALSPEED < -1.
 
-// Attendre le point de freinage
-WAIT UNTIL altPerdueDurantFreinage() * marge >= ALT:RADAR.
+// Attendre le point de freinage OU le periapsis
+// Sur corps a forte gravite (Mun): le critere d'altitude declenche avant le PE
+// Sur corps a faible gravite (Minmus): le PE arrive en premier car la chute
+//   pendant le burn est negligeable face a l'altitude
+WAIT UNTIL altPerdueDurantFreinage() * marge >= ALT:RADAR
+    OR ETA:PERIAPSIS < 2.
 
 // === PHASE 3: SUICIDE BURN ===
 PRINT "Phase: suicide burn    " AT (0,6).
@@ -187,3 +206,5 @@ WAIT 0.5.
 bipDouble().
 
 PRINT "Pose reussie sur " + BODY:NAME + "!" AT (0,14).
+
+} // fin IF periapsis >= 500

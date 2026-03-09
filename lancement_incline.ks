@@ -119,4 +119,4 @@ IF TIME:SECONDS > limiteTemps {
 PRINT "Fenetre! Lancement...              " AT (0, 15).
 
 // === DELEGATION AU SCRIPT DE MONTEE ===
-RUNPATH("0:/lancement_peg", capLancement, apoapseCible).
+RUNPATH("0:/lancement", capLancement, apoapseCible).

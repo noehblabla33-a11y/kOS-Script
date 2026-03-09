@@ -58,3 +58,32 @@ FUNCTION anglePhase {
 FUNCTION excentricite {
     RETURN SHIP:ORBIT:ECCENTRICITY.
 }
+
+// === GESTION THRUSTLIMIT ===
+
+// Adapte le THRUSTLIMIT de tous les moteurs pour qu'un burn de dvBurn m/s
+// dure au moins dureeMin secondes. Retourne le pourcentage applique.
+// Sur un corps ou le burn est deja assez long, retourne 100 sans rien changer.
+FUNCTION limitePoussee {
+    PARAMETER dvBurn.
+    PARAMETER dureeMin IS 8.
+
+    LOCAL acc IS accelMax().
+    LOCAL dureeBurn IS dvBurn / MAX(0.01, acc).
+    LOCAL pct IS MIN(100, (dureeBurn / dureeMin) * 100).
+    SET pct TO MAX(3, pct).
+
+    LIST ENGINES IN listeM.
+    FOR m IN listeM {
+        SET m:THRUSTLIMIT TO pct.
+    }
+    RETURN ROUND(pct, 1).
+}
+
+// Remet tous les moteurs a 100%
+FUNCTION restaurerPoussee {
+    LIST ENGINES IN listeM.
+    FOR m IN listeM {
+        SET m:THRUSTLIMIT TO 100.
+    }
+}
